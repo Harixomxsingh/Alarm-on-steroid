@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum Alarm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-card {
+            background: rgba(15, 15, 15, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @keyframes pulse-blue {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            50% { box-shadow: 0 0 20px 2px rgba(59, 130, 246, 0.3); }
+        }
+
+        .armed-pulse {
+            animation: pulse-blue 2s infinite;
+        }
+
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .btn-active:active {
+            transform: scale(0.95);
+        }
+
+        .countdown-glow {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        
+        .transition-view {
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .time-input-field {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-weight: 900;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="w-full max-w-md mx-auto">
+        <!-- Views injected here -->
+    </div>
+
+    <script>
+        const INSIGHTS = [
+            "The 1% Rule: Small improvements accumulate into massive results through compounding.",
+            "Deep Work: Focus on cognitively demanding tasks without distraction.",
+            "First Principles: Break down complex problems into basic elements.",
+            "Eat the Frog: Tackle your most difficult task first thing in the morning.",
+            "Pareto Principle: 80% of results come from 20% of activities."
+        ];
+
+        const WORDS = [
+            { word: "Luminous", def: "Full of or shedding light; bright or shining.", ex: "The luminous moon illuminated the path." },
+            { word: "Resilient", def: "Able to recover quickly from difficult conditions.", ex: "She showed a resilient spirit." },
+            { word: "Cognizant", def: "Having knowledge or being aware of.", ex: "Be cognizant of the potential risks." },
+            { word: "Efficacy", def: "The ability to produce a desired or intended result.", ex: "The efficacy of the treatment was praised." }
+        ];
+
+        let state = {
+            view: 'IDLE', 
+            lastView: null,
+            currentTime: new Date(),
+            alarmTime: localStorage.getItem('momentum-alarm') || "08:00",
+            lastFiredMinute: '', 
+            streak: parseInt(localStorage.getItem('momentum-streak')) || 0,
+            verificationStage: 0,
+            nextAlarmTime: null,
+            timerRemaining: 60,
+            mathTask: { q: '', a: 0 },
+            isEditing: false,
+            tempH: 8,
+            tempM: 0,
+            dailyInsight: INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)],
+            dailyWord: WORDS[Math.floor(Math.random() * WORDS.length)]
+        };
+
+        const app = document.getElementById('app');
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playAlarmSound() {
+            initAudio();
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            } catch(e) {}
+        }
+
+        function playVictorySound() {
+            initAudio();
+            try {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((f, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.frequency.setValueAtTime(f, audioCtx.currentTime + i * 0.1);
+                    g.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.1);
+                    g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.1 + 0.4);
+                    o.connect(g);
+                    g.connect(audioCtx.destination);
+                    o.start(audioCtx.currentTime + i * 0.1);
+                    o.stop(audioCtx.currentTime + i * 0.1 + 0.5);
+                });
+            } catch(e) {}
+        }
+
+        function updateTime() {
+            state.currentTime = new Date();
+            const nowH = state.currentTime.getHours().toString().padStart(2, '0');
+            const nowM = state.currentTime.getMinutes().toString().padStart(2, '0');
+            const nowStr = `${nowH}:${nowM}`;
+
+            if (state.view === 'IDLE' && nowStr === state.alarmTime && state.lastFiredMinute !== nowStr) {
+                state.lastFiredMinute = nowStr;
+                triggerAlarm();
+            }
+
+            if (state.view === 'VERIFICATION' && state.nextAlarmTime && state.currentTime >= state.nextAlarmTime) {
+                triggerAlarm();
+            }
+
+            // Passive updates for clock/countdown without re-rendering the whole view
+            updateDynamicElements();
+            
+            // Only re-render full layout if view state changed
+            if (state.view !== state.lastView) {
+                render();
+            }
+
+            // Sound loop for ringing state
+            if (state.view === 'RINGING') {
+                playAlarmSound();
+            }
+        }
+
+        function triggerAlarm() {
+            state.view = 'RINGING';
+            generateMath();
+        }
+
+        function generateMath() {
+            const a = Math.floor(Math.random() * 50) + 10;
+            const b = Math.floor(Math.random() * 50) + 10;
+            state.mathTask = { q: `${a} + ${b}`, a: a + b };
+        }
+
+        function handleTaskSubmit() {
+            const input = document.getElementById('mathInput');
+            if (!input) return;
+            const val = input.value;
+            
+            if (parseInt(val) === state.mathTask.a) {
+                state.verificationStage++;
+                if (state.verificationStage >= 3) {
+                    state.view = 'SUCCESS';
+                    state.streak++;
+                    localStorage.setItem('momentum-streak', state.streak);
+                    playVictorySound();
+                } else {
+                    state.view = 'VERIFICATION';
+                    const next = new Date();
+                    next.setSeconds(next.getSeconds() + 120); // 2 min test interval
+                    state.nextAlarmTime = next;
+                }
+                render();
+            } else {
+                input.classList.add('border-red-500');
+                input.value = '';
+                setTimeout(() => input.classList.remove('border-red-500'), 500);
+            }
+        }
+
+        function updateDynamicElements() {
+            // Update the Home Clock if it exists
+            const clockEl = document.getElementById('main-clock-display');
+            if (clockEl) {
+                const h = state.currentTime.getHours().toString().padStart(2, '0');
+                const m = state.currentTime.getMinutes().toString().padStart(2, '0');
+                const s = state.currentTime.getSeconds().toString().padStart(2, '0');
+                clockEl.innerHTML = `${h}:${m}<span class="text-2xl text-zinc-800 font-bold ml-2">:${s}</span>`;
+            }
+
+            // Update Countdown Timer if it exists
+            const countEl = document.getElementById('countdown-timer');
+            if (countEl && state.nextAlarmTime) {
+                const diff = state.nextAlarmTime - state.currentTime;
+                const totalSeconds = Math.max(0, Math.floor(diff / 1000));
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                countEl.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function render() {
+            state.lastView = state.view;
+            if (state.view === 'IDLE') renderHome();
+            else if (state.view === 'RINGING') renderAlarm();
+            else if (state.view === 'VERIFICATION') renderWait();
+            else if (state.view === 'SUCCESS') renderSuccess();
+        }
+
+        function renderHome() {
+            app.innerHTML = `
+                <div class="space-y-12 py-10 animate-in fade-in duration-500">
+                    <div class="text-center">
+                        <p class="text-zinc-600 uppercase tracking-[0.3em] text-[10px] font-black mb-4">Internal Chronos</p>
+                        <h1 id="main-clock-display" class="text-8xl font-thin tracking-tighter tabular-nums text-white">--:--:--</h1>
+                    </div>
+
+                    <div class="glass-card rounded-[3rem] p-8 shadow-2xl transition-all hover:border-zinc-700 ${state.isEditing ? '' : 'armed-pulse'}">
+                        <div class="flex justify-between items-center mb-10">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-blue-600/20 p-3 rounded-2xl"><i class="fa-solid fa-clock text-blue-500"></i></div>
+                                <span class="font-bold text-lg">Momentum</span>
+                            </div>
+                            <span class="text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500 px-3 py-1 rounded-full border border-blue-500/20">
+                                ${state.isEditing ? 'Editing' : 'Armed'}
+                            </span>
+                        </div>
+
+                        ${state.isEditing ? `
+                            <div class="space-y-8">
+                                <div class="flex items-center justify-center space-x-6">
+                                    <!-- Hours Hybrid Input -->
+                                    <div class="flex flex-col items-center">
+                                        <button onclick="changeTempH(1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-up text-xl"></i></button>
+                                        <div class="bg-zinc-800 w-24 h-24 flex items-center justify-center rounded-3xl border border-zinc-700 overflow-hidden">
+                                            <input type="number" value="${state.tempH.toString().padStart(2, '0')}" 
+                                                   oninput="manualTimeEntry('H', this.value)"
+                                                   class="time-input-field text-6xl" min="0" max="23">
+                                        </div>
+                                        <button onclick="changeTempH(-1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-down text-xl"></i></button>
+                                    </div>
+                                    <div class="text-4xl font-black text-zinc-800 pb-10">:</div>
+                                    <!-- Minutes Hybrid Input -->
+                                    <div class="flex flex-col items-center">
+                                        <button onclick="changeTempM(1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-up text-xl"></i></button>
+                                        <div class="bg-zinc-800 w-24 h-24 flex items-center justify-center rounded-3xl border border-zinc-700 overflow-hidden">
+                                            <input type="number" value="${state.tempM.toString().padStart(2, '0')}" 
+                                                   oninput="manualTimeEntry('M', this.value)"
+                                                   class="time-input-field text-6xl" min="0" max="59">
+                                        </div>
+                                        <button onclick="changeTempM(-1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-down text-xl"></i></button>
+                                    </div>
+                                </div>
+                                <div class="text-center text-zinc-600 text-[10px] uppercase font-black tracking-widest">Type or use arrows</div>
+                                <button onclick="saveTime()" class="w-full bg-blue-600 py-6 rounded-3xl font-black uppercase tracking-widest text-xs btn-active shadow-lg shadow-blue-900/40">Confirm Alarm</button>
+                            </div>
+                        ` : `
+                            <div onclick="toggleEdit()" class="cursor-pointer bg-black/40 p-10 rounded-[2.5rem] border-2 border-dashed border-zinc-800 hover:border-blue-500/30 text-center group transition-all">
+                                <div class="text-7xl font-black tracking-tighter group-hover:scale-105 transition-transform text-white">${state.alarmTime}</div>
+                                <div class="mt-4 text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-keyboard"></i> Set Time
+                                </div>
+                            </div>
+                        `}
+
+                        <div class="mt-10 pt-8 border-t border-zinc-800/50 flex justify-between items-center">
+                            <div class="flex items-center space-x-3">
+                                <i class="fa-solid fa-trophy text-amber-500 text-xl"></i>
+                                <span class="text-3xl font-black tracking-tighter text-white">${state.streak}</span>
+                            </div>
+                            <div class="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                                Daily Lock: ${state.alarmTime}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            updateDynamicElements();
+        }
+
+        function renderAlarm() {
+            app.innerHTML = `
+                <div class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+                    <div class="absolute inset-0 bg-blue-600/5 animate-pulse"></div>
+                    <div class="relative z-10 mb-16">
+                        <div class="w-32 h-32 bg-blue-600/10 rounded-full flex items-center justify-center mb-10 mx-auto border-4 border-blue-500/20 animate-bounce">
+                            <i class="fa-solid fa-volume-high text-blue-500 text-5xl"></i>
+                        </div>
+                        <h2 class="text-7xl font-black italic uppercase tracking-tighter mb-4 text-white">Phase ${state.verificationStage + 1}</h2>
+                        <p class="text-zinc-500 font-black tracking-[0.5em] text-xs uppercase">Verification Active</p>
+                    </div>
+
+                    <div class="relative z-10 w-full max-w-sm glass-card rounded-[3.5rem] p-12 shadow-2xl">
+                        <div class="text-8xl font-black mb-14 tracking-tighter text-white">${state.mathTask.q}</div>
+                        <input type="number" id="mathInput" autofocus class="w-full bg-zinc-800 text-white text-6xl p-8 rounded-[2rem] border-2 border-transparent focus:border-blue-500 outline-none text-center mb-10 shadow-inner" placeholder="?">
+                        <button onclick="handleTaskSubmit()" class="w-full bg-white text-black font-black py-8 rounded-[2rem] uppercase tracking-widest text-sm btn-active">Verify</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => {
+                const input = document.getElementById('mathInput');
+                if (input) {
+                    input.focus();
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') handleTaskSubmit();
+                    });
+                }
+            }, 200);
+        }
+
+        function renderWait() {
+            app.innerHTML = `
+                <div class="flex flex-col items-center justify-center space-y-16 py-10 text-center animate-in slide-in-from-bottom-10 duration-500">
+                    <div class="relative">
+                        <div class="w-72 h-72 border-[20px] border-zinc-900 rounded-full flex items-center justify-center">
+                            <div class="w-56 h-56 border-[8px] border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="countdown-timer" class="text-4xl font-black text-white countdown-glow tabular-nums mb-1">0:00</span>
+                            <span class="text-[10px] font-black uppercase text-blue-500 tracking-[0.2em]">Next Window</span>
+                        </div>
+                    </div>
+                    <div class="space-y-6">
+                        <h2 class="text-6xl font-black italic uppercase tracking-tighter text-white">Stay Focused</h2>
+                        <p class="text-zinc-500 text-sm font-bold uppercase tracking-[0.4em] max-w-xs mx-auto leading-loose">
+                            Phase ${state.verificationStage} clear. Stand by for next prompt.
+                        </p>
+                    </div>
+                </div>
+            `;
+            updateDynamicElements();
+        }
+
+        function renderSuccess() {
+            app.innerHTML = `
+                <div class="space-y-12 py-10 max-w-md mx-auto animate-in fade-in duration-1000">
+                    <header class="flex justify-between items-center">
+                        <div class="space-y-2">
+                            <h1 class="text-6xl font-black italic uppercase tracking-tighter leading-none text-white">Victory</h1>
+                            <p class="text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em]">Establish Momentum</p>
+                        </div>
+                        <div class="bg-amber-500/10 text-amber-500 p-6 rounded-[2rem] border border-amber-500/20 text-center">
+                            <i class="fa-solid fa-trophy block mb-2 text-2xl"></i>
+                            <span class="text-4xl font-black tracking-tighter">${state.streak}</span>
+                        </div>
+                    </header>
+
+                    <div class="space-y-8">
+                        <div class="glass-card p-10 rounded-[3.5rem] relative overflow-hidden">
+                            <div class="flex items-center gap-3 text-blue-500 mb-8 font-black uppercase text-[10px] tracking-widest">
+                                <i class="fa-solid fa-brain"></i> 1% Insight
+                            </div>
+                            <p class="text-2xl font-bold italic leading-relaxed relative z-10 text-white">"${state.dailyInsight}"</p>
+                        </div>
+
+                        <div class="glass-card p-10 rounded-[3.5rem]">
+                            <div class="flex items-center gap-3 text-amber-500 mb-8 font-black uppercase text-[10px] tracking-widest">
+                                <i class="fa-solid fa-book-open"></i> Articulation
+                            </div>
+                            <h3 class="text-5xl font-black uppercase tracking-tighter mb-4 text-white">${state.dailyWord.word}</h3>
+                            <p class="text-zinc-500 italic text-xl mb-8">${state.dailyWord.def}</p>
+                            <div class="bg-black/50 p-8 rounded-3xl border-l-[10px] border-amber-500 italic text-zinc-400">"${state.dailyWord.ex}"</div>
+                        </div>
+
+                        <button onclick="resetApp()" class="w-full bg-white text-black font-black py-10 rounded-[2.5rem] font-black uppercase tracking-[0.4em] text-xs btn-active shadow-2xl">Reset System</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Hybrid Entry Handlers ---
+        window.manualTimeEntry = (type, val) => {
+            let n = parseInt(val);
+            if (isNaN(n)) return;
+            
+            if (type === 'H') {
+                if (n > 23) n = 23;
+                if (n < 0) n = 0;
+                state.tempH = n;
+            } else {
+                if (n > 59) n = 59;
+                if (n < 0) n = 0;
+                state.tempM = n;
+            }
+        };
+
+        window.toggleEdit = () => { initAudio(); state.isEditing = true; render(); };
+        window.changeTempH = (v) => { 
+            state.tempH = (state.tempH + v + 24) % 24; 
+            render(); 
+        };
+        window.changeTempM = (v) => { 
+            state.tempM = (state.tempM + v + 60) % 60; 
+            render(); 
+        };
+
+        window.saveTime = () => {
+            state.alarmTime = `${state.tempH.toString().padStart(2, '0')}:${state.tempM.toString().padStart(2, '0')}`;
+            localStorage.setItem('momentum-alarm', state.alarmTime);
+            state.isEditing = false;
+            state.lastFiredMinute = '';
+            render();
+        };
+
+        window.resetApp = () => {
+            state.view = 'IDLE';
+            state.verificationStage = 0;
+            state.nextAlarmTime = null;
+            state.lastFiredMinute = '';
+            render();
+        };
+
+        setInterval(updateTime, 1000);
+        render();
+
+    </script>
+</body>
+</html>
