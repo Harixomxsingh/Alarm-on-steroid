@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum Alarm | Master Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-card {
+            background: rgba(15, 15, 15, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @keyframes pulse-blue {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            50% { box-shadow: 0 0 20px 2px rgba(59, 130, 246, 0.3); }
+        }
+
+        .armed-pulse {
+            animation: pulse-blue 2s infinite;
+        }
+
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .btn-active:active {
+            transform: scale(0.95);
+        }
+
+        .countdown-glow {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        .time-input-field {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-weight: 900;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        .shake-error {
+            animation: shake 0.4s ease-in-out;
+            border-color: #ef4444 !important;
+        }
+
+        .home-button-shadow {
+            box-shadow: 0 8px 32px rgba(255, 255, 255, 0.15);
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 10px;
+        }
+
+        /* Tooltip behavior for weather */
+        .weather-tooltip {
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .weather-container:hover .weather-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="w-full max-w-md mx-auto relative">
+        <!-- Views injected via JavaScript -->
+    </div>
+
+    <script>
+        // --- Configuration & Static Content ---
+        const INSIGHTS = [
+            "The 1% Rule: Small improvements accumulate into massive results.",
+            "Deep Work: Focus on cognitively demanding tasks without distraction.",
+            "First Principles: Break down complex problems into basic elements.",
+            "Eat the Frog: Tackle your most difficult task first thing in the morning."
+        ];
+
+        const WORDS = [
+            { word: "Luminous", def: "Full of or shedding light; bright or shining.", ex: "The luminous moon illuminated the dark path." },
+            { word: "Resilient", def: "Able to recover quickly from difficult conditions.", ex: "She showed a resilient spirit after the setback." },
+            { word: "Cognizant", def: "Having knowledge or being aware of.", ex: "Be cognizant of the potential risks involved." }
+        ];
+
+        const STORY = `Like many people, I struggled with a simple but frustrating problem: waking up on time.\n\nEvery morning, I'd set my alarm for 8 AM, but I'd find myself waking up at noon, frustrated that half the day was already gone. Standard alarms were too easy to silence while half-asleep.\n\nI realized regular alarms weren't enough. I needed something that would force my brain to actually wake up—cutting through the "sleep fog" with cognitive challenges. That’s why I built Momentum. By the time you finish the puzzles, your mind is active, the laziness is gone, and you're ready to start your day with purpose.\n\nHere’s to taking control of our mornings, one challenge at a time.`;
+
+        // --- State Management ---
+        let state = {
+            view: 'IDLE', // IDLE, RINGING, VERIFICATION, SUCCESS, ABOUT, SET_LOCATION
+            lastView: null,
+            currentTime: new Date(),
+            alarmTime: localStorage.getItem('m-alarm-web-v3') || "08:00",
+            lastFiredMinute: '', 
+            streak: parseInt(localStorage.getItem('m-streak-web-v3')) || 0,
+            verificationStage: 0,
+            nextAlarmTime: null,
+            mathTask: { q: '', a: 0 },
+            isEditing: false,
+            tempH: 8,
+            tempM: 0,
+            dailyInsight: '',
+            dailyWord: {},
+            weather: JSON.parse(localStorage.getItem('m-weather-cache')) || null,
+            locationName: localStorage.getItem('m-location-name') || 'New Delhi',
+            lat: localStorage.getItem('m-lat') || 28.6139,
+            lon: localStorage.getItem('m-lon') || 77.2090
+        };
+
+        const app = document.getElementById('app');
+        let audioCtx = null;
+        let activeOscillator = null;
+
+        // --- Audio Logic ---
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        async function playAlarmSound() {
+            if (state.view !== 'RINGING') return;
+            initAudio();
+            if (activeOscillator) return; 
+
+            activeOscillator = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            activeOscillator.type = 'sawtooth';
+            activeOscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+            activeOscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+            
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            
+            activeOscillator.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            activeOscillator.start();
+            activeOscillator.onended = () => { activeOscillator = null; };
+            activeOscillator.stop(audioCtx.currentTime + 0.5);
+        }
+
+        async function stopAlarmSound() {
+            if (activeOscillator) {
+                try {
+                    activeOscillator.stop();
+                    activeOscillator.disconnect();
+                } catch (e) {}
+            }
+            activeOscillator = null;
+            return Promise.resolve();
+        }
+
+        function playVictorySound() {
+            initAudio();
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((f, i) => {
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.frequency.setValueAtTime(f, audioCtx.currentTime + i * 0.1);
+                g.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.1);
+                g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.1 + 0.4);
+                o.connect(g);
+                g.connect(audioCtx.destination);
+                o.start(audioCtx.currentTime + i * 0.1);
+                o.stop(audioCtx.currentTime + i * 0.1 + 0.5);
+            });
+        }
+
+        // --- Weather Logic ---
+        async function updateWeather(query) {
+            try {
+                // 1. Geocoding
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
+                const geoData = await geoRes.json();
+                
+                if (!geoData.results || geoData.results.length === 0) {
+                    alert("Location not found. Defaulting to New Delhi.");
+                    return;
+                }
+
+                const result = geoData.results[0];
+                state.lat = result.latitude;
+                state.lon = result.longitude;
+                state.locationName = result.name;
+
+                // Save coordinates
+                localStorage.setItem('m-lat', state.lat);
+                localStorage.setItem('m-lon', state.lon);
+                localStorage.setItem('m-location-name', state.locationName);
+
+                // 2. Fetch Weather
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${state.lat}&longitude=${state.lon}&current_weather=true`);
+                const weatherData = await weatherRes.json();
+                
+                state.weather = weatherData.current_weather;
+                localStorage.setItem('m-weather-cache', JSON.stringify(state.weather));
+                
+                state.view = 'IDLE';
+                render();
+            } catch (e) {
+                console.error("Weather service failure", e);
+            }
+        }
+
+        function getWeatherIcon(code) {
+            // Mapping WMO Codes to FontAwesome
+            if (code === 0) return 'fa-sun text-amber-400';
+            if (code <= 3) return 'fa-cloud-sun text-zinc-400';
+            if (code <= 48) return 'fa-smog text-zinc-500';
+            if (code <= 67) return 'fa-cloud-showers-heavy text-blue-400';
+            if (code <= 77) return 'fa-snowflake text-blue-200';
+            if (code <= 82) return 'fa-cloud-rain text-blue-500';
+            return 'fa-bolt text-amber-500';
+        }
+
+        // --- Application Logic ---
+        function updateTime() {
+            state.currentTime = new Date();
+            const nowH = state.currentTime.getHours().toString().padStart(2, '0');
+            const nowM = state.currentTime.getMinutes().toString().padStart(2, '0');
+            const nowStr = `${nowH}:${nowM}`;
+
+            if (state.view === 'IDLE' && nowStr === state.alarmTime && state.lastFiredMinute !== nowStr) {
+                state.lastFiredMinute = nowStr;
+                triggerAlarm();
+            }
+
+            if (state.view === 'VERIFICATION' && state.nextAlarmTime && state.currentTime >= state.nextAlarmTime) {
+                triggerAlarm();
+            }
+
+            updateDynamicElements();
+            
+            if (state.view !== state.lastView) {
+                render();
+            }
+
+            if (state.view === 'RINGING') {
+                playAlarmSound();
+            }
+        }
+
+        function triggerAlarm() {
+            state.view = 'RINGING';
+            const a = Math.floor(Math.random() * 40) + 10;
+            const b = Math.floor(Math.random() * 40) + 10;
+            state.mathTask = { q: `${a} + ${b}`, a: a + b };
+        }
+
+        window.handleTaskSubmit = async (event) => {
+            if (event) event.preventDefault();
+            const input = document.getElementById('mathInput');
+            if (!input) return;
+            const val = parseInt(input.value.trim());
+
+            if (val === state.mathTask.a) {
+                state.view = 'PENDING';
+                await stopAlarmSound();
+                await new Promise(r => setTimeout(r, 200)); 
+
+                state.verificationStage++;
+                if (state.verificationStage >= 3) {
+                    state.view = 'SUCCESS';
+                    state.streak++;
+                    localStorage.setItem('m-streak-web-v3', state.streak);
+                    playVictorySound();
+                } else {
+                    state.view = 'VERIFICATION';
+                    const next = new Date();
+                    next.setSeconds(next.getSeconds() + 120); 
+                    state.nextAlarmTime = next;
+                }
+                render();
+            } else {
+                const card = document.getElementById('mathCard');
+                if (card) card.classList.add('shake-error');
+                setTimeout(() => card && card.classList.remove('shake-error'), 400);
+                input.value = '';
+                input.focus();
+            }
+        };
+
+        function updateDynamicElements() {
+            const clockEl = document.getElementById('clock-text');
+            if (clockEl) {
+                const h = state.currentTime.getHours().toString().padStart(2, '0');
+                const m = state.currentTime.getMinutes().toString().padStart(2, '0');
+                const s = state.currentTime.getSeconds().toString().padStart(2, '0');
+                clockEl.innerHTML = `${h}:${m}<span class="text-2xl text-zinc-800 font-bold ml-2">:${s}</span>`;
+            }
+
+            const miniClockEl = document.getElementById('mini-clock');
+            if (miniClockEl) {
+                miniClockEl.innerText = state.currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            }
+
+            const countEl = document.getElementById('countdown-timer');
+            if (countEl && state.nextAlarmTime) {
+                const diff = state.nextAlarmTime - state.currentTime;
+                const totalSeconds = Math.max(0, Math.floor(diff / 1000));
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                countEl.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function render() {
+            state.lastView = state.view;
+            app.innerHTML = '';
+            
+            if (state.view === 'ABOUT') renderAbout();
+            else if (state.view === 'SET_LOCATION') renderLocationPrompt();
+            else if (state.view === 'IDLE') renderHome();
+            else if (state.view === 'RINGING') renderAlarm();
+            else if (state.view === 'VERIFICATION') renderWait();
+            else if (state.view === 'SUCCESS') renderSuccess();
+        }
+
+        function renderHome() {
+            const weatherIcon = state.weather ? getWeatherIcon(state.weather.weathercode) : 'fa-location-crosshairs text-blue-500';
+            const temp = state.weather ? `${Math.round(state.weather.temperature)}°C` : 'Set City';
+
+            app.innerHTML = `
+                <div class="space-y-12 py-6 animate-in fade-in duration-500">
+                    <div class="flex justify-between items-center px-2">
+                        <div>
+                            <h2 class="text-white text-2xl font-black italic">Momentum</h2>
+                            <p class="text-zinc-600 text-[10px] font-black tracking-widest uppercase italic">Lead Architect</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <!-- Weather Widget -->
+                            <div class="weather-container relative group cursor-pointer" onclick="state.view='SET_LOCATION'; render()">
+                                <div class="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-2xl flex items-center gap-3 transition-colors hover:bg-zinc-800">
+                                    <i class="fa-solid ${weatherIcon}"></i>
+                                    <span class="text-sm font-black tabular-nums">${temp}</span>
+                                </div>
+                                <div class="weather-tooltip absolute top-full right-0 mt-3 glass-card p-4 rounded-2xl z-50 min-w-[140px] text-right">
+                                    <p class="text-white font-black text-xs mb-1">${state.locationName}</p>
+                                    <p class="text-zinc-500 text-[10px] uppercase font-bold tracking-widest italic">Hourly Context</p>
+                                </div>
+                            </div>
+
+                            <button onclick="state.view='ABOUT'; render()" class="w-11 h-11 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800 transition-colors">
+                                <i class="fa-solid fa-user text-zinc-400"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="text-center py-4">
+                        <p class="text-zinc-700 uppercase tracking-[0.4em] text-[10px] font-black mb-2">Chronos Heartbeat</p>
+                        <h1 id="clock-text" class="text-8xl font-thin tracking-tighter tabular-nums text-white">--:--:--</h1>
+                    </div>
+
+                    <div class="glass-card rounded-[3rem] p-8 shadow-2xl ${state.isEditing ? '' : 'armed-pulse'} transition-all hover:border-zinc-700">
+                        <div class="flex justify-between items-center mb-10">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-blue-600/20 p-3 rounded-2xl"><i class="fa-solid fa-clock text-blue-500"></i></div>
+                                <span class="font-bold text-lg">System Lock</span>
+                            </div>
+                            <span class="text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500 px-3 py-1 rounded-full border border-blue-500/20">
+                                ${state.isEditing ? 'Editing' : 'Armed'}
+                            </span>
+                        </div>
+
+                        ${state.isEditing ? `
+                            <div class="space-y-8">
+                                <div class="flex items-center justify-center space-x-6">
+                                    <div class="flex flex-col items-center">
+                                        <button onclick="nudgeH(1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-up text-xl"></i></button>
+                                        <div class="bg-zinc-800 w-24 h-24 flex items-center justify-center rounded-3xl border border-zinc-700 overflow-hidden">
+                                            <input type="text" inputmode="numeric" id="manual-h" value="${state.tempH.toString().padStart(2, '0')}" oninput="manualEntry('H', this.value)" class="time-input-field text-6xl">
+                                        </div>
+                                        <button onclick="nudgeH(-1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-down text-xl"></i></button>
+                                    </div>
+                                    <div class="text-4xl font-black text-zinc-800 pb-10">:</div>
+                                    <div class="flex flex-col items-center">
+                                        <button onclick="nudgeM(1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-up text-xl"></i></button>
+                                        <div class="bg-zinc-800 w-24 h-24 flex items-center justify-center rounded-3xl border border-zinc-700 overflow-hidden">
+                                            <input type="text" inputmode="numeric" id="manual-m" value="${state.tempM.toString().padStart(2, '0')}" oninput="manualEntry('M', this.value)" class="time-input-field text-6xl">
+                                        </div>
+                                        <button onclick="nudgeM(-1)" class="p-2 text-zinc-700 hover:text-white"><i class="fa-solid fa-chevron-down text-xl"></i></button>
+                                    </div>
+                                </div>
+                                <button onclick="save()" class="w-full bg-blue-600 py-6 rounded-3xl font-black uppercase tracking-widest text-xs btn-active shadow-lg shadow-blue-900/40">Lock Phase Time</button>
+                            </div>
+                        ` : `
+                            <div onclick="toggleEdit()" class="cursor-pointer bg-black/40 p-10 rounded-[2.5rem] border-2 border-dashed border-zinc-800 hover:border-blue-500/30 text-center group transition-all">
+                                <div class="text-7xl font-black tracking-tighter group-hover:scale-105 transition-transform text-white">${state.alarmTime}</div>
+                                <div class="mt-4 text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-keyboard"></i> Tap to Adjust
+                                </div>
+                            </div>
+                        `}
+
+                        <div class="mt-10 pt-8 border-t border-zinc-800/50 flex justify-between items-center">
+                            <div class="flex items-center space-x-3">
+                                <i class="fa-solid fa-trophy text-amber-500 text-xl"></i>
+                                <span class="text-3xl font-black tracking-tighter text-white">${state.streak}</span>
+                            </div>
+                            <div class="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] animate-pulse">
+                                Operational
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            updateDynamicElements();
+        }
+
+        function renderLocationPrompt() {
+            app.innerHTML = `
+                <div class="space-y-8 py-16 animate-in slide-in-from-bottom duration-500">
+                    <div class="text-center">
+                        <i class="fa-solid fa-location-dot text-blue-500 text-5xl mb-6"></i>
+                        <h2 class="text-4xl font-black italic tracking-tighter mb-4">Set Location</h2>
+                        <p class="text-zinc-500 text-sm font-medium uppercase tracking-widest leading-relaxed">
+                            Enter city name or PIN code for accurate Celsius tracking.
+                        </p>
+                    </div>
+
+                    <div class="glass-card p-10 rounded-[3rem]">
+                        <input type="text" id="locSearch" placeholder="E.g. London or 110001" 
+                               class="w-full bg-zinc-800 text-white p-6 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none mb-6 font-bold text-center">
+                        <button onclick="updateWeather(document.getElementById('locSearch').value)" 
+                                class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs btn-active shadow-lg shadow-blue-900/40">
+                            Sync Climate
+                        </button>
+                        <button onclick="state.view='IDLE'; render()" class="w-full text-zinc-600 text-[10px] font-black uppercase tracking-widest mt-8">Cancel</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => document.getElementById('locSearch').focus(), 100);
+        }
+
+        function renderAlarm() {
+            app.innerHTML = `
+                <div class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+                    <div class="absolute inset-0 bg-blue-600/5 animate-pulse"></div>
+                    <div class="relative z-10 mb-16">
+                        <div class="w-32 h-32 bg-blue-600/10 rounded-full flex items-center justify-center mb-10 mx-auto border-4 border-blue-500/20 animate-bounce">
+                            <i class="fa-solid fa-volume-high text-blue-500 text-5xl"></i>
+                        </div>
+                        <h2 class="text-7xl font-black italic uppercase tracking-tighter mb-4 text-white">Phase ${state.verificationStage + 1}</h2>
+                        <p class="text-zinc-500 font-black tracking-[0.5em] text-xs uppercase italic">Verification Needed</p>
+                    </div>
+
+                    <form id="mathCard" onsubmit="handleTaskSubmit(event)" class="relative z-10 w-full max-w-sm glass-card rounded-[3.5rem] p-12 shadow-2xl border-2 border-transparent transition-all">
+                        <div class="text-8xl font-black mb-14 tracking-tighter text-white">${state.mathTask.q}</div>
+                        <input type="text" inputmode="numeric" id="mathInput" autofocus required autocomplete="off"
+                               class="w-full bg-zinc-800 text-white text-6xl p-8 rounded-[2rem] border-2 border-transparent focus:border-blue-500 outline-none text-center mb-10 shadow-inner" 
+                               placeholder="?">
+                        <button type="submit" class="w-full bg-white text-black font-black py-8 rounded-[2rem] uppercase tracking-widest text-sm btn-active">Verify</button>
+                    </form>
+                </div>
+            `;
+            setTimeout(() => { const i = document.getElementById('mathInput'); if (i) i.focus(); }, 150);
+        }
+
+        function renderWait() {
+            app.innerHTML = `
+                <div class="flex flex-col items-center justify-center space-y-16 py-10 text-center animate-in slide-in-from-bottom-10 duration-500">
+                    <div class="relative">
+                        <div class="w-72 h-72 border-[20px] border-zinc-900 rounded-full flex items-center justify-center">
+                            <div class="w-56 h-56 border-[8px] border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="countdown-timer" class="text-5xl font-black text-white countdown-glow tabular-nums mb-1">0:00</span>
+                            <span class="text-[10px] font-black uppercase text-blue-500 tracking-[0.2em]">Next Trigger</span>
+                        </div>
+                    </div>
+                    <div class="space-y-6">
+                        <h2 class="text-6xl font-black italic uppercase tracking-tighter text-white leading-none">Stage ${state.verificationStage} Secured</h2>
+                        <p class="text-zinc-500 text-sm font-bold uppercase tracking-[0.4em] max-w-xs mx-auto leading-loose">
+                            Persistence loop active. Do not relapse.
+                        </p>
+                    </div>
+                </div>
+            `;
+            updateDynamicElements();
+        }
+
+        function renderSuccess() {
+            const weatherIcon = state.weather ? getWeatherIcon(state.weather.weathercode) : 'fa-location-dot';
+            
+            app.innerHTML = `
+                <div class="space-y-8 py-6 max-w-md mx-auto animate-in fade-in duration-1000">
+                    <header class="flex justify-between items-center">
+                        <h1 class="text-6xl font-black italic uppercase tracking-tighter text-white">Victory</h1>
+                        <div class="bg-amber-500/10 text-amber-500 p-6 rounded-[2rem] border border-amber-500/20">
+                            <i class="fa-solid fa-trophy block mb-2 text-2xl"></i>
+                            <span class="text-3xl font-black tracking-tighter">${state.streak}</span>
+                        </div>
+                    </header>
+
+                    <!-- Success Page Weather -->
+                    <div class="glass-card p-8 rounded-[2.5rem] flex items-center justify-between border border-blue-500/10">
+                        <div>
+                            <p class="text-zinc-500 font-black uppercase tracking-widest text-[10px] mb-2">Morning Climate</p>
+                            <h3 class="text-white text-2xl font-black">${state.locationName}</h3>
+                        </div>
+                        <div class="text-right">
+                            ${state.weather ? `
+                                <div class="flex items-center gap-3">
+                                    <i class="fa-solid ${weatherIcon} text-blue-500 text-2xl"></i>
+                                    <span class="text-4xl font-black text-white">${Math.round(state.weather.temperature)}°C</span>
+                                </div>
+                            ` : `<span class="text-zinc-700 animate-pulse uppercase text-[10px] font-black">Updating...</span>`}
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-10 rounded-[3.5rem]">
+                        <div class="text-blue-500 mb-6 font-black uppercase text-[10px] tracking-[0.4em]">1% Insight</div>
+                        <p class="text-2xl font-bold italic text-white leading-relaxed">"${state.dailyInsight}"</p>
+                    </div>
+
+                    <div class="glass-card p-10 rounded-[3.5rem]">
+                        <div class="text-amber-500 mb-6 font-black uppercase text-[10px] tracking-[0.4em]">Articulation</div>
+                        <h3 class="text-5xl font-black uppercase tracking-tighter mb-4 text-white">${state.dailyWord.word}</h3>
+                        <p class="text-zinc-500 italic text-xl mb-8">${state.dailyWord.def}</p>
+                        <div class="bg-black/40 p-6 rounded-2xl italic text-zinc-300 border-l-4 border-amber-500">"${state.dailyWord.ex}"</div>
+                    </div>
+
+                    <button onclick="state.view='IDLE'; state.verificationStage=0; render()" 
+                            class="w-full bg-white text-black py-10 rounded-[3rem] font-black uppercase tracking-[0.5em] text-lg btn-active home-button-shadow flex items-center justify-center gap-4">
+                        <span class="text-2xl">🏠</span> HOME
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderAbout() {
+            app.innerHTML = `
+                <div class="fixed inset-0 bg-black z-[100] animate-in slide-in-from-bottom duration-500">
+                    <div class="h-full overflow-y-auto px-6 pt-16 pb-12">
+                        <div class="flex justify-between items-center mb-12 px-2">
+                            <h2 class="text-6xl font-black italic text-white tracking-tighter">About</h2>
+                            <button onclick="state.view='IDLE'; render()" class="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800">
+                                <i class="fa-solid fa-xmark text-xl text-white"></i>
+                            </button>
+                        </div>
+
+                        <div class="glass-card p-10 rounded-[3rem] mb-8 text-center border-blue-500/20">
+                            <h3 class="text-3xl font-black text-white mb-2 italic">Momentum Alarm</h3>
+                            <p class="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Version 1.0.0 | Precision Engineered</p>
+                        </div>
+
+                        <div class="glass-card p-8 rounded-[2.5rem] mb-8 border-white/10">
+                            <p class="text-blue-500 font-black uppercase tracking-widest text-[10px] mb-6">👨‍💻 Created By</p>
+                            <h4 class="text-4xl font-black text-white mb-2">Vaibhav Rajput</h4>
+                            <p class="text-zinc-400 italic font-medium">Developer • Creator • Problem Solver</p>
+                        </div>
+
+                        <div class="glass-card p-8 rounded-[2.5rem] mb-8">
+                            <p class="text-amber-500 font-black uppercase tracking-widest text-[10px] mb-6">💡 The Story</p>
+                            <p class="text-zinc-300 leading-relaxed italic text-lg whitespace-pre-line">${STORY}</p>
+                        </div>
+
+                        <div class="glass-card p-8 rounded-[2.5rem] mb-12">
+                            <p class="text-blue-500 font-black uppercase tracking-widest text-[10px] mb-8">🔗 Connect</p>
+                            
+                            <a href="https://www.youtube.com/@vaibhav.rajpute/featured" target="_blank" class="flex items-center gap-6 bg-blue-500/10 p-6 rounded-3xl mb-4 border border-blue-500/20 btn-active">
+                                <span class="text-4xl">📺</span>
+                                <div class="flex-1">
+                                    <p class="text-white font-black text-xl">YouTube</p>
+                                    <p class="text-zinc-500 text-sm">Watch My Content</p>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-blue-500"></i>
+                            </a>
+
+                            <a href="https://github.com/Harixomxsingh" target="_blank" class="flex items-center gap-6 bg-zinc-800/20 p-6 rounded-3xl mb-4 border border-zinc-800 btn-active">
+                                <span class="text-4xl">💻</span>
+                                <div class="flex-1">
+                                    <p class="text-white font-black text-xl">GitHub</p>
+                                    <p class="text-zinc-500 text-sm">View My Projects</p>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-zinc-500"></i>
+                            </a>
+
+                            <a href="https://www.linkedin.com/in/harixomxsingh/" target="_blank" class="flex items-center gap-6 bg-blue-600/10 p-6 rounded-3xl border border-blue-600/20 btn-active">
+                                <span class="text-4xl">💼</span>
+                                <div class="flex-1">
+                                    <p class="text-white font-black text-xl">LinkedIn</p>
+                                    <p class="text-zinc-500 text-sm">Professional Profile</p>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-blue-400"></i>
+                            </a>
+                        </div>
+
+                        <div class="text-center py-8 opacity-40">
+                            <p class="text-xs uppercase tracking-widest font-black">Built with dedication & coffee ☕</p>
+                            <p class="text-[10px] mt-2">© 2025 Vaibhav Rajput</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Event Handlers ---
+        window.toggleEdit = () => { initAudio(); state.isEditing = true; render(); };
+        window.nudgeH = (v) => { state.tempH = (state.tempH + v + 24) % 24; render(); };
+        window.nudgeM = (v) => { state.tempM = (state.tempM + v + 60) % 60; render(); };
+        window.manualEntry = (t, v) => {
+            let n = parseInt(v) || 0;
+            if (t === 'H') state.tempH = Math.min(23, Math.max(0, n));
+            else state.tempM = Math.min(59, Math.max(0, n));
+        };
+        window.save = () => {
+            state.alarmTime = `${state.tempH.toString().padStart(2, '0')}:${state.tempM.toString().padStart(2, '0')}`;
+            localStorage.setItem('m-alarm-web-v3', state.alarmTime);
+            state.isEditing = false;
+            state.lastFiredMinute = '';
+            render();
+        };
+
+        // Init session data
+        state.dailyInsight = INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)];
+        state.dailyWord = WORDS[Math.floor(Math.random() * WORDS.length)];
+
+        setInterval(updateTime, 1000);
+        render();
+    </script>
+</body>
+</html>
