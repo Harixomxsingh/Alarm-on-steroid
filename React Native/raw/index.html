@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTERNAL CHRONOS - Momentum Alarm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .content {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .label {
+            color: #52525b;
+            letter-spacing: 4px;
+            font-size: 10px;
+            font-weight: 900;
+            margin-bottom: 15px;
+        }
+
+        .clock {
+            color: #fff;
+            font-size: 80px;
+            font-weight: 100;
+            letter-spacing: -2px;
+            line-height: 1;
+            margin-bottom: 20px;
+        }
+
+        .seconds {
+            font-size: 24px;
+            color: #27272a;
+            font-weight: 900;
+        }
+
+        .card {
+            background-color: #09090b;
+            border-radius: 45px;
+            width: 100%;
+            padding: 28px;
+            margin-top: 40px;
+            border: 1px solid #18181b;
+            animation: pulse 2s infinite;
+        }
+
+        .card.editing {
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 35px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .row-centered {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .card-title {
+            color: #fff;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .badge {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 5px 14px;
+            border-radius: 20px;
+        }
+
+        .display-container {
+            background-color: rgba(255, 255, 255, 0.02);
+            border-radius: 35px;
+            padding: 45px;
+            text-align: center;
+            border: 2px dashed #18181b;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .display-container:hover {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+
+        .alarm-text {
+            color: #fff;
+            font-size: 72px;
+            font-weight: 900;
+            margin-bottom: 12px;
+        }
+
+        .small-label {
+            color: #52525b;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 2px;
+        }
+
+        .edit-container {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .picker-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nudge-btn {
+            background: none;
+            border: none;
+            color: #52525b;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 24px;
+            transition: color 0.2s;
+        }
+
+        .nudge-btn:hover {
+            color: #3b82f6;
+        }
+
+        .time-input {
+            background-color: #18181b;
+            color: #fff;
+            font-size: 52px;
+            font-weight: 900;
+            width: 100px;
+            height: 100px;
+            border-radius: 25px;
+            text-align: center;
+            border: none;
+            outline: none;
+        }
+
+        .separator {
+            color: #27272a;
+            font-size: 48px;
+            font-weight: 900;
+            margin-top: 10px;
+        }
+
+        .primary-btn {
+            background-color: #3b82f6;
+            padding: 22px;
+            border-radius: 22px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+            color: #fff;
+            font-weight: 900;
+            font-size: 12px;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .primary-btn:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+        }
+
+        .primary-btn:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            margin-top: 35px;
+            padding-top: 25px;
+            border-top: 1px solid #18181b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .streak-count {
+            color: #fff;
+            font-size: 28px;
+            font-weight: 900;
+        }
+
+        .full-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 25px;
+        }
+
+        .phase-label {
+            color: #fff;
+            font-size: 52px;
+            font-weight: 900;
+            font-style: italic;
+            margin-top: 25px;
+            letter-spacing: -1px;
+        }
+
+        .math-card {
+            background-color: #09090b;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 45px;
+            padding: 35px;
+            margin-top: 45px;
+            text-align: center;
+            border: 1px solid #18181b;
+        }
+
+        .math-text {
+            color: #fff;
+            font-size: 88px;
+            font-weight: 900;
+            margin-bottom: 35px;
+            letter-spacing: -2px;
+        }
+
+        .answer-input {
+            background-color: #18181b;
+            color: #fff;
+            width: 100%;
+            font-size: 64px;
+            padding: 25px;
+            border-radius: 25px;
+            text-align: center;
+            margin-bottom: 35px;
+            border: none;
+            outline: none;
+            font-weight: 900;
+        }
+
+        .answer-input::placeholder {
+            color: #27272a;
+        }
+
+        .verify-btn {
+            background-color: #fff;
+            width: 100%;
+            padding: 28px;
+            border-radius: 25px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+            color: #000;
+            font-weight: 900;
+            letter-spacing: 2px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .verify-btn:hover {
+            background-color: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .verify-btn:active {
+            transform: translateY(0);
+        }
+
+        .timer-circle {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            border: 12px solid #09090b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .countdown {
+            color: #fff;
+            font-size: 56px;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }
+
+        .status-text {
+            color: #fff;
+            font-size: 36px;
+            font-weight: 900;
+            margin-top: 45px;
+            font-style: italic;
+        }
+
+        .sub-status {
+            color: #52525b;
+            font-weight: bold;
+            margin-top: 12px;
+            letter-spacing: 1px;
+            font-size: 14px;
+        }
+
+        .scroll-content {
+            padding: 25px;
+            padding-top: 65px;
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+
+        .success-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 45px;
+        }
+
+        .success-title {
+            color: #fff;
+            font-size: 52px;
+            font-weight: 900;
+            font-style: italic;
+            letter-spacing: -2px;
+        }
+
+        .streak-badge {
+            background-color: rgba(245, 158, 11, 0.05);
+            padding: 18px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid rgba(245, 158, 11, 0.1);
+        }
+
+        .streak-text {
+            color: #f59e0b;
+            font-size: 28px;
+            font-weight: 900;
+        }
+
+        .info-card {
+            background-color: #09090b;
+            border-radius: 35px;
+            padding: 35px;
+            margin-bottom: 25px;
+            border: 1px solid #18181b;
+        }
+
+        .info-title {
+            color: #3b82f6;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            margin-bottom: 15px;
+        }
+
+        .info-title.amber {
+            color: #f59e0b;
+        }
+
+        .info-body {
+            color: #fff;
+            font-size: 22px;
+            font-weight: bold;
+            font-style: italic;
+            line-height: 32px;
+        }
+
+        .vocab-word {
+            color: #fff;
+            font-size: 42px;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }
+
+        .vocab-def {
+            color: #52525b;
+            font-size: 16px;
+            font-weight: bold;
+            font-style: italic;
+            margin-bottom: 20px;
+        }
+
+        .reset-btn {
+            background-color: #fff;
+            padding: 28px;
+            border-radius: 28px;
+            text-align: center;
+            margin-top: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            border: none;
+            cursor: pointer;
+            color: #000;
+            font-weight: 900;
+            letter-spacing: 2px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .reset-btn:hover {
+            background-color: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .reset-btn:active {
+            transform: translateY(0);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .scroll-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .scroll-content::-webkit-scrollbar-track {
+            background: #09090b;
+            border-radius: 4px;
+        }
+
+        .scroll-content::-webkit-scrollbar-thumb {
+            background: #18181b;
+            border-radius: 4px;
+        }
+
+        .scroll-content::-webkit-scrollbar-thumb:hover {
+            background: #27272a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div id="idle-state" class="center">
+                <p class="label">INTERNAL CHRONOS</p>
+                <div class="clock">
+                    <span id="clock-hours">00</span>:<!--
+                 --><span id="clock-minutes">00</span><!--
+                 --><span class="seconds">:<span id="clock-seconds">00</span></span>
+                </div>
+
+                <div class="card" id="card-element">
+                    <div class="card-header">
+                        <div class="row">
+                            <span>🕐</span>
+                            <span class="card-title">Momentum</span>
+                        </div>
+                        <span class="badge" id="badge-text">ARMED</span>
+                    </div>
+
+                    <div id="display-mode" class="display-container">
+                        <div class="alarm-text" id="alarm-display">08:00</div>
+                        <div class="row">
+                            <span>⚙️</span>
+                            <span class="small-label">TAP TO ADJUST</span>
+                        </div>
+                    </div>
+
+                    <div id="edit-mode" class="edit-container hidden">
+                        <div class="row-centered">
+                            <div class="picker-column">
+                                <button class="nudge-btn" id="hour-up">▲</button>
+                                <input type="number" class="time-input" id="hour-input" min="0" max="23" value="08">
+                                <button class="nudge-btn" id="hour-down">▼</button>
+                            </div>
+                            <span class="separator">:</span>
+                            <div class="picker-column">
+                                <button class="nudge-btn" id="minute-up">▲</button>
+                                <input type="number" class="time-input" id="minute-input" min="0" max="59" value="00">
+                                <button class="nudge-btn" id="minute-down">▼</button>
+                            </div>
+                        </div>
+                        <button class="primary-btn" id="confirm-btn">CONFIRM WAKE TIME</button>
+                    </div>
+
+                    <div class="footer">
+                        <div class="row">
+                            <span>🏆</span>
+                            <span class="streak-count" id="streak-display">0</span>
+                        </div>
+                        <span>🔔</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ringing-state" class="hidden full-overlay">
+                <div style="font-size: 60px;">🔊</div>
+                <p class="phase-label" id="phase-label">PHASE 1</p>
+                <div class="math-card">
+                    <div class="math-text" id="math-question">0 + 0</div>
+                    <input type="number" class="answer-input" id="answer-input" placeholder="?" autofocus>
+                    <button class="verify-btn" id="verify-btn">VERIFY CONSCIOUSNESS</button>
+                </div>
+            </div>
+
+            <div id="verification-state" class="hidden center">
+                <div class="timer-circle">
+                    <p class="countdown" id="countdown-display">2:00</p>
+                    <p class="small-label">NEXT TRIGGER</p>
+                </div>
+                <p class="status-text" id="phase-secured">PHASE 1 SECURED</p>
+                <p class="sub-status">Do not relapse. The loop is active.</p>
+            </div>
+
+            <div id="success-state" class="hidden scroll-content">
+                <div class="success-header">
+                    <p class="success-title">MOMENTUM</p>
+                    <div class="streak-badge">
+                        <span>🏆</span>
+                        <span class="streak-text" id="success-streak">0</span>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <div class="row">
+                        <span>💡</span>
+                        <p class="info-title">1% INSIGHT</p>
+                    </div>
+                    <p class="info-body" id="insight-text">"The 1% Rule: Small improvements accumulate into massive results."</p>
+                </div>
+
+                <div class="info-card">
+                    <div class="row">
+                        <span>📖</span>
+                        <p class="info-title amber">VOCABULARY</p>
+                    </div>
+                    <p class="vocab-word" id="vocab-word">Luminous</p>
+                    <p class="vocab-def" id="vocab-def">Full of or shedding light; bright or shining.</p>
+                </div>
+
+                <button class="reset-btn" id="reset-btn">🔄 RESET FOR TOMORROW</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ALARM_STAGES = {
+            IDLE: 'IDLE',
+            RINGING: 'RINGING',
+            VERIFICATION: 'VERIFICATION',
+            SUCCESS: 'SUCCESS'
+        };
+
+        const INSIGHTS = [
+            "The 1% Rule: Small improvements accumulate into massive results.",
+            "Deep Work: Focus on cognitively demanding tasks without distraction.",
+            "First Principles: Break down complex problems into basic elements.",
+            "Eat the Frog: Tackle your most difficult task first thing in the morning."
+        ];
+
+        const WORDS = [
+            { word: "Luminous", def: "Full of or shedding light; bright or shining." },
+            { word: "Resilient", def: "Able to recover quickly from difficult conditions." }
+        ];
+
+        const APP_ID = 'momentum-v2-web';
+
+        let appState = ALARM_STAGES.IDLE;
+        let alarmTime = "08:00";
+        let streak = 0;
+        let verificationStage = 0;
+        let nextAlarmTime = null;
+        let mathTask = { q: '', a: 0 };
+        let userInput = '';
+        let isEditing = false;
+        let isRinging = false;
+
+        const clockHours = document.getElementById('clock-hours');
+        const clockMinutes = document.getElementById('clock-minutes');
+        const clockSeconds = document.getElementById('clock-seconds');
+        const alarmDisplay = document.getElementById('alarm-display');
+        const streakDisplay = document.getElementById('streak-display');
+        const badgeText = document.getElementById('badge-text');
+        const cardElement = document.getElementById('card-element');
+        const displayMode = document.getElementById('display-mode');
+        const editMode = document.getElementById('edit-mode');
+        const hourInput = document.getElementById('hour-input');
+        const minuteInput = document.getElementById('minute-input');
+        const hourUp = document.getElementById('hour-up');
+        const hourDown = document.getElementById('hour-down');
+        const minuteUp = document.getElementById('minute-up');
+        const minuteDown = document.getElementById('minute-down');
+        const confirmBtn = document.getElementById('confirm-btn');
+        const mathQuestion = document.getElementById('math-question');
+        const answerInput = document.getElementById('answer-input');
+        const verifyBtn = document.getElementById('verify-btn');
+        const countdownDisplay = document.getElementById('countdown-display');
+        const phaseSecured = document.getElementById('phase-secured');
+        const phaseLabel = document.getElementById('phase-label');
+        const insightText = document.getElementById('insight-text');
+        const vocabWord = document.getElementById('vocab-word');
+        const vocabDef = document.getElementById('vocab-def');
+        const successStreak = document.getElementById('success-streak');
+        const resetBtn = document.getElementById('reset-btn');
+
+        const stateViews = {
+            [ALARM_STAGES.IDLE]: document.getElementById('idle-state'),
+            [ALARM_STAGES.RINGING]: document.getElementById('ringing-state'),
+            [ALARM_STAGES.VERIFICATION]: document.getElementById('verification-state'),
+            [ALARM_STAGES.SUCCESS]: document.getElementById('success-state')
+        };
+
+        function init() {
+            loadData();
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        function loadData() {
+            const savedAlarm = localStorage.getItem(`${APP_ID}-alarm`);
+            const savedStreak = localStorage.getItem(`${APP_ID}-streak`);
+            if (savedAlarm) {
+                alarmTime = savedAlarm;
+            }
+            if (savedStreak) {
+                streak = parseInt(savedStreak);
+            }
+            updateDisplay();
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const h = now.getHours().toString().padStart(2, '0');
+            const m = now.getMinutes().toString().padStart(2, '0');
+            const s = now.getSeconds().toString().padStart(2, '0');
+
+            clockHours.textContent = h;
+            clockMinutes.textContent = m;
+            clockSeconds.textContent = s;
+
+            if (appState === ALARM_STAGES.IDLE && `${h}:${m}` === alarmTime && s === '00') {
+                triggerAlarm();
+            }
+
+            if (appState === ALARM_STAGES.VERIFICATION && nextAlarmTime) {
+                const now = new Date();
+                if (now >= nextAlarmTime) {
+                    triggerAlarm();
+                } else {
+                    updateCountdown();
+                }
+            }
+        }
+
+        function updateDisplay() {
+            alarmDisplay.textContent = alarmTime;
+            streakDisplay.textContent = streak;
+            const [h, m] = alarmTime.split(':');
+            hourInput.value = h;
+            minuteInput.value = m;
+        }
+
+        function setState(newState) {
+            appState = newState;
+            Object.values(stateViews).forEach(view => view.classList.add('hidden'));
+            stateViews[newState].classList.remove('hidden');
+        }
+
+        function triggerAlarm() {
+            if (isRinging) return;
+            isRinging = true;
+            setState(ALARM_STAGES.RINGING);
+            verificationStage = 0;
+
+            const a = Math.floor(Math.random() * 50) + 10;
+            const b = Math.floor(Math.random() * 50) + 10;
+            mathTask = { q: `${a} + ${b}`, a: a + b };
+            mathQuestion.textContent = mathTask.q;
+            phaseLabel.textContent = `PHASE ${verificationStage + 1}`;
+            answerInput.value = '';
+            answerInput.focus();
+
+            playAlarmSound();
+        }
+
+        function playAlarmSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const freq = 800;
+                const duration = 0.5;
+
+                function playBeep() {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'sine';
+                    gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                    osc.start(audioContext.currentTime);
+                    osc.stop(audioContext.currentTime + duration);
+                }
+
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => playBeep(), i * 600);
+                }
+
+                if (isRinging) {
+                    setTimeout(() => playAlarmSound(), 3000);
+                }
+            } catch (e) {
+                console.log("Audio error:", e);
+            }
+        }
+
+        function stopAlarmSound() {
+            isRinging = false;
+        }
+
+        displayMode.addEventListener('click', () => {
+            isEditing = true;
+            displayMode.classList.add('hidden');
+            editMode.classList.remove('hidden');
+            badgeText.textContent = 'EDITING';
+            cardElement.classList.add('editing');
+        });
+
+        hourUp.addEventListener('click', () => {
+            let h = parseInt(hourInput.value);
+            hourInput.value = ((h + 1) % 24).toString().padStart(2, '0');
+        });
+
+        hourDown.addEventListener('click', () => {
+            let h = parseInt(hourInput.value);
+            hourInput.value = ((h - 1 + 24) % 24).toString().padStart(2, '0');
+        });
+
+        minuteUp.addEventListener('click', () => {
+            let m = parseInt(minuteInput.value);
+            minuteInput.value = ((m + 1) % 60).toString().padStart(2, '0');
+        });
+
+        minuteDown.addEventListener('click', () => {
+            let m = parseInt(minuteInput.value);
+            minuteInput.value = ((m - 1 + 60) % 60).toString().padStart(2, '0');
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            alarmTime = `${hourInput.value}:${minuteInput.value}`;
+            localStorage.setItem(`${APP_ID}-alarm`, alarmTime);
+            isEditing = false;
+            displayMode.classList.remove('hidden');
+            editMode.classList.add('hidden');
+            badgeText.textContent = 'ARMED';
+            cardElement.classList.remove('editing');
+            updateDisplay();
+        });
+
+        verifyBtn.addEventListener('click', () => {
+            if (parseInt(answerInput.value) === mathTask.a) {
+                stopAlarmSound();
+                const nextStage = verificationStage + 1;
+                verificationStage = nextStage;
+
+                if (nextStage >= 3) {
+                    streak += 1;
+                    localStorage.setItem(`${APP_ID}-streak`, streak.toString());
+                    setState(ALARM_STAGES.SUCCESS);
+                    insightText.textContent = `"${INSIGHTS[streak % INSIGHTS.length]}"`;
+                    const wordData = WORDS[streak % WORDS.length];
+                    vocabWord.textContent = wordData.word;
+                    vocabDef.textContent = wordData.def;
+                    successStreak.textContent = streak;
+                } else {
+                    setState(ALARM_STAGES.VERIFICATION);
+                    nextAlarmTime = new Date(Date.now() + 120000);
+                    phaseSecured.textContent = `PHASE ${verificationStage} SECURED`;
+                    updateCountdown();
+                }
+                answerInput.value = '';
+            } else {
+                answerInput.value = '';
+                answerInput.focus();
+                answerInput.style.borderColor = '#ef4444';
+                setTimeout(() => {
+                    answerInput.style.borderColor = 'transparent';
+                }, 300);
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            appState = ALARM_STAGES.IDLE;
+            verificationStage = 0;
+            nextAlarmTime = null;
+            setState(ALARM_STAGES.IDLE);
+            updateDisplay();
+        });
+
+        answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                verifyBtn.click();
+            }
+        });
+
+        function updateCountdown() {
+            if (!nextAlarmTime) return;
+            const now = new Date();
+            const diff = Math.max(0, Math.floor((nextAlarmTime - now) / 1000));
+            const m = Math.floor(diff / 60);
+            const s = (diff % 60).toString().padStart(2, '0');
+            countdownDisplay.textContent = `${m}:${s}`;
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
+const { width } = Dimensions.get('window');
+
+// --- Configuration ---
+const ALARM_STAGES = {
+  IDLE: 'IDLE',
+  RINGING: 'RINGING',
+  VERIFICATION: 'VERIFICATION',
+  SUCCESS: 'SUCCESS'
+};
+
+const INSIGHTS = [
+  "The 1% Rule: Small improvements accumulate into massive results.",
+  "Deep Work: Focus on cognitively demanding tasks without distraction.",
+  "First Principles: Break down complex problems into basic elements.",
+  "Eat the Frog: Tackle your most difficult task first thing in the morning."
+];
+
+const WORDS = [
+  { word: "Luminous", def: "Full of or shedding light; bright or shining.", ex: "The luminous moon illuminated the path." },
+  { word: "Resilient", def: "Able to recover quickly from difficult conditions.", ex: "She showed a resilient spirit." }
+];
+
+const APP_ID = 'momentum-v2-mobile';
+
+export default function App() {
+  const [appState, setAppState] = useState(ALARM_STAGES.IDLE);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [alarmTime, setAlarmTime] = useState("08:00");
+  const [streak, setStreak] = useState(0);
+  const [verificationStage, setVerificationStage] = useState(0);
+  const [nextAlarmTime, setNextAlarmTime] = useState(null);
+  const [mathTask, setMathTask] = useState({ q: '', a: 0 });
+  const [userInput, setUserInput] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempH, setTempH] = useState(8);
+  const [tempM, setTempM] = useState(0);
+
+  const soundRef = useRef(null);
+
+  // --- Initialization ---
+  useEffect(() => {
+    loadData();
+    const ticker = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const savedAlarm = await AsyncStorage.getItem(`${APP_ID}-alarm`);
+      const savedStreak = await AsyncStorage.getItem(`${APP_ID}-streak`);
+      if (savedAlarm) {
+        setAlarmTime(savedAlarm);
+        const [h, m] = savedAlarm.split(':').map(Number);
+        setTempH(h);
+        setTempM(m);
+      }
+      if (savedStreak) setStreak(parseInt(savedStreak));
+    } catch (e) {
+      console.log("Storage error:", e);
+    }
+  };
+
+  // --- Audio Engine ---
+  async function playAlarm() {
+    try {
+      // Note: In a real Expo environment, ensure the audio mode is set to play in silent mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3' },
+        { shouldPlay: true, isLooping: true }
+      );
+      soundRef.current = sound;
+      Vibration.vibrate([500, 500, 500], true);
+    } catch (e) { 
+      console.log("Audio play error:", e); 
+    }
+  }
+
+  async function stopAlarm() {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+      Vibration.cancel();
+    } catch (e) {
+      console.log("Audio stop error:", e);
+    }
+  }
+
+  // --- Logic Heartbeat ---
+  useEffect(() => {
+    const nowH = currentTime.getHours().toString().padStart(2, '0');
+    const nowM = currentTime.getMinutes().toString().padStart(2, '0');
+    const nowStr = `${nowH}:${nowM}`;
+
+    if (appState === ALARM_STAGES.IDLE && nowStr === alarmTime && currentTime.getSeconds() === 0) {
+      triggerAlarm();
+    }
+
+    if (appState === ALARM_STAGES.VERIFICATION && nextAlarmTime && currentTime >= nextAlarmTime) {
+      triggerAlarm();
+    }
+  }, [currentTime]);
+
+  const triggerAlarm = () => {
+    setAppState(ALARM_STAGES.RINGING);
+    const a = Math.floor(Math.random() * 50) + 10;
+    const b = Math.floor(Math.random() * 50) + 10;
+    setMathTask({ q: `${a} + ${b}`, a: a + b });
+    playAlarm();
+  };
+
+  const handleTaskSubmit = async () => {
+    if (parseInt(userInput) === mathTask.a) {
+      await stopAlarm();
+      const nextStage = verificationStage + 1;
+      setVerificationStage(nextStage);
+
+      if (nextStage >= 3) {
+        setAppState(ALARM_STAGES.SUCCESS);
+        const newStreak = streak + 1;
+        setStreak(newStreak);
+        await AsyncStorage.setItem(`${APP_ID}-streak`, newStreak.toString());
+      } else {
+        setAppState(ALARM_STAGES.VERIFICATION);
+        const next = new Date();
+        next.setSeconds(next.getSeconds() + 120); // 2 min testing interval
+        setNextAlarmTime(next);
+      }
+      setUserInput('');
+    } else {
+      setUserInput('');
+      Vibration.vibrate(200);
+    }
+  };
+
+  const saveTime = async () => {
+    const newTime = `${tempH.toString().padStart(2, '0')}:${tempM.toString().padStart(2, '0')}`;
+    setAlarmTime(newTime);
+    await AsyncStorage.setItem(`${APP_ID}-alarm`, newTime);
+    setIsEditing(false);
+  };
+
+  const formatCountdown = () => {
+    if (!nextAlarmTime) return "0:00";
+    const diff = Math.max(0, Math.floor((nextAlarmTime - currentTime) / 1000));
+    const m = Math.floor(diff / 60);
+    const s = diff % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+      >
+        {appState === ALARM_STAGES.IDLE && (
+          <View style={styles.center}>
+            <Text style={styles.label}>INTERNAL CHRONOS</Text>
+            <Text style={styles.clock}>
+              {currentTime.getHours().toString().padStart(2, '0')}:
+              {currentTime.getMinutes().toString().padStart(2, '0')}
+              <Text style={styles.seconds}>:{currentTime.getSeconds().toString().padStart(2, '0')}</Text>
+            </Text>
+
+            <View style={[styles.card, !isEditing && styles.armedPulse]}>
+              <View style={styles.cardHeader}>
+                <View style={styles.row}>
+                  <AlarmClock color="#3b82f6" size={20} />
+                  <Text style={styles.cardTitle}>Momentum</Text>
+                </View>
+                <Text style={styles.badge}>{isEditing ? "EDITING" : "ARMED"}</Text>
+              </View>
+
+              {isEditing ? (
+                <View style={styles.editContainer}>
+                  <View style={styles.rowCentered}>
+                    <View style={styles.pickerColumn}>
+                      <TouchableOpacity onPress={() => setTempH((tempH + 1) % 24)} style={styles.nudgeBtn}>
+                        <ChevronUp color="#52525b" size={24} />
+                      </TouchableOpacity>
+                      <TextInput 
+                        style={styles.timeInput} 
+                        keyboardType="number-pad"
+                        value={tempH.toString().padStart(2, '0')}
+                        onChangeText={(v) => setTempH(Math.min(23, Math.max(0, parseInt(v) || 0)))}
+                      />
+                      <TouchableOpacity onPress={() => setTempH((tempH - 1 + 24) % 24)} style={styles.nudgeBtn}>
+                        <ChevronDown color="#52525b" size={24} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.separator}>:</Text>
+                    <View style={styles.pickerColumn}>
+                      <TouchableOpacity onPress={() => setTempM((tempM + 1) % 60)} style={styles.nudgeBtn}>
+                        <ChevronUp color="#52525b" size={24} />
+                      </TouchableOpacity>
+                      <TextInput 
+                        style={styles.timeInput} 
+                        keyboardType="number-pad"
+                        value={tempM.toString().padStart(2, '0')}
+                        onChangeText={(v) => setTempM(Math.min(59, Math.max(0, parseInt(v) || 0)))}
+                      />
+                      <TouchableOpacity onPress={() => setTempM((tempM - 1 + 60) % 60)} style={styles.nudgeBtn}>
+                        <ChevronDown color="#52525b" size={24} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={saveTime}>
+                    <Text style={styles.btnText}>CONFIRM WAKE TIME</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.displayContainer} onPress={() => setIsEditing(true)}>
+                  <Text style={styles.alarmText}>{alarmTime}</Text>
+                  <View style={styles.row}>
+                    <Settings color="#52525b" size={12} />
+                    <Text style={styles.smallLabel}>TAP TO ADJUST</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              <View style={styles.footer}>
+                <View style={styles.row}>
+                  <Trophy color="#f59e0b" size={20} />
+                  <Text style={styles.streakCount}>{streak}</Text>
+                </View>
+                <Bell color="#3b82f6" size={16} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {appState === ALARM_STAGES.RINGING && (
+          <View style={styles.fullOverlay}>
+            <Volume2 color="#3b82f6" size={60} />
+            <Text style={styles.phaseLabel}>PHASE {verificationStage + 1}</Text>
+            <View style={styles.mathCard}>
+              <Text style={styles.mathText}>{mathTask.q}</Text>
+              <TextInput 
+                style={styles.answerInput}
+                keyboardType="number-pad"
+                autoFocus
+                placeholder="?"
+                placeholderTextColor="#27272a"
+                value={userInput}
+                onChangeText={setUserInput}
+              />
+              <TouchableOpacity style={styles.verifyBtn} onPress={handleTaskSubmit}>
+                <Text style={styles.btnTextDark}>VERIFY CONSCIOUSNESS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {appState === ALARM_STAGES.VERIFICATION && (
+          <View style={styles.center}>
+            <View style={styles.timerCircle}>
+               <Text style={styles.countdown}>{formatCountdown()}</Text>
+               <Text style={styles.smallLabel}>NEXT TRIGGER</Text>
+            </View>
+            <Text style={styles.statusText}>PHASE {verificationStage} SECURED</Text>
+            <Text style={styles.subStatus}>Do not relapse. The loop is active.</Text>
+          </View>
+        )}
+
+        {appState === ALARM_STAGES.SUCCESS && (
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={styles.successHeader}>
+              <Text style={styles.successTitle}>MOMENTUM</Text>
+              <View style={styles.streakBadge}>
+                <Trophy color="#f59e0b" size={20} />
+                <Text style={styles.streakText}>{streak}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.infoCard}>
+               <View style={styles.row}>
+                <Lightbulb color="#3b82f6" size={18} />
+                <Text style={styles.infoTitle}>1% INSIGHT</Text>
+               </View>
+               <Text style={styles.infoBody}>"{INSIGHTS[streak % INSIGHTS.length]}"</Text>
+            </View>
+
+            <View style={styles.infoCard}>
+               <View style={styles.row}>
+                <BookOpen color="#f59e0b" size={18} />
+                <Text style={[styles.infoTitle, { color: '#f59e0b' }]}>VOCABULARY</Text>
+               </View>
+               <Text style={styles.vocabWord}>{WORDS[streak % WORDS.length].word}</Text>
+               <Text style={styles.vocabDef}>{WORDS[streak % WORDS.length].def}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.resetBtn} onPress={() => { setAppState(ALARM_STAGES.IDLE); setVerificationStage(0); }}>
+              <RefreshCcw color="#000" size={18} />
+              <Text style={styles.btnTextDark}>RESET FOR TOMORROW</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  label: { color: '#52525b', letterSpacing: 4, fontSize: 10, fontWeight: '900', marginBottom: 15 },
+  clock: { color: '#fff', fontSize: 80, fontWeight: '100', letterSpacing: -2 },
+  seconds: { fontSize: 24, color: '#27272a', fontWeight: '900' },
+  card: { backgroundColor: '#09090b', borderRadius: 45, width: '100%', padding: 28, marginTop: 40, borderWidth: 1, borderColor: '#18181b' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 35 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowCentered: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 },
+  cardTitle: { color: '#fff', fontWeight: 'bold', fontSize: 20 },
+  badge: { backgroundColor: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: 10, fontWeight: '900', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
+  displayContainer: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 35, padding: 45, alignItems: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: '#18181b' },
+  alarmText: { color: '#fff', fontSize: 72, fontWeight: '900', marginBottom: 12 },
+  smallLabel: { color: '#52525b', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+  editContainer: { gap: 25 },
+  pickerColumn: { alignItems: 'center', gap: 8 },
+  nudgeBtn: { padding: 5 },
+  timeInput: { backgroundColor: '#18181b', color: '#fff', fontSize: 52, fontWeight: '900', width: 100, height: 100, borderRadius: 25, textAlign: 'center' },
+  separator: { color: '#27272a', fontSize: 48, fontWeight: '900', marginTop: 10 },
+  primaryBtn: { backgroundColor: '#3b82f6', padding: 22, borderRadius: 22, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: '900', fontSize: 12, letterSpacing: 2 },
+  footer: { marginTop: 35, paddingTop: 25, borderTopWidth: 1, borderTopColor: '#18181b', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  streakCount: { color: '#fff', fontSize: 28, fontWeight: '900' },
+  fullOverlay: { position: 'absolute', inset: 0, backgroundColor: '#000', zIndex: 100, alignItems: 'center', justifyContent: 'center', padding: 25 },
+  phaseLabel: { color: '#fff', fontSize: 52, fontWeight: '900', fontStyle: 'italic', marginTop: 25, letterSpacing: -1 },
+  mathCard: { backgroundColor: '#09090b', width: '100%', borderRadius: 45, padding: 35, marginTop: 45, alignItems: 'center', borderWidth: 1, borderColor: '#18181b' },
+  mathText: { color: '#fff', fontSize: 88, fontWeight: '900', marginBottom: 35, letterSpacing: -2 },
+  answerInput: { backgroundColor: '#18181b', color: '#fff', width: '100%', fontSize: 64, padding: 25, borderRadius: 25, textAlign: 'center', marginBottom: 35 },
+  verifyBtn: { backgroundColor: '#fff', width: '100%', padding: 28, borderRadius: 25, alignItems: 'center' },
+  btnTextDark: { color: '#000', fontWeight: '900', letterSpacing: 2, fontSize: 12 },
+  timerCircle: { width: 280, height: 280, borderRadius: 140, borderWidth: 12, borderColor: '#09090b', alignItems: 'center', justifyContent: 'center' },
+  countdown: { color: '#fff', fontSize: 56, fontWeight: '900', marginBottom: 8 },
+  statusText: { color: '#fff', fontSize: 36, fontWeight: '900', marginTop: 45, fontStyle: 'italic' },
+  subStatus: { color: '#52525b', fontWeight: 'bold', marginTop: 12, letterSpacing: 1, fontSize: 14 },
+  scrollContent: { padding: 25, paddingTop: 65 },
+  successHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 45 },
+  successTitle: { color: '#fff', fontSize: 52, fontWeight: '900', fontStyle: 'italic', letterSpacing: -2 },
+  streakBadge: { backgroundColor: 'rgba(245,158,11,0.05)', padding: 18, borderRadius: 25, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(245,158,11,0.1)' },
+  streakText: { color: '#f59e0b', fontSize: 28, fontWeight: '900' },
+  infoCard: { backgroundColor: '#09090b', borderRadius: 35, padding: 35, marginBottom: 25, borderWidth: 1, borderColor: '#18181b' },
+  infoTitle: { color: '#3b82f6', fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 15 },
+  infoBody: { color: '#fff', fontSize: 22, fontWeight: 'bold', fontStyle: 'italic', lineHeight: 32 },
+  vocabWord: { color: '#fff', fontSize: 42, fontWeight: '900', marginBottom: 5 },
+  vocabDef: { color: '#52525b', fontSize: 16, fontWeight: 'bold', fontStyle: 'italic', marginBottom: 20 },
+  resetBtn: { backgroundColor: '#fff', padding: 28, borderRadius: 28, alignItems: 'center', marginTop: 25, flexDirection: 'row', justifyContent: 'center', gap: 12 }
+});
